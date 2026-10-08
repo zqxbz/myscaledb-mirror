@@ -6,17 +6,50 @@ jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve repo and tag
+        id: resolve
+        run: |
+          set -e
+          REPO=myscale/myscaledb
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://hub.docker.com/v2/repositories/$REPO/")
+          echo "hub check $REPO -> $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "== repo missing, list all repos in 'myscale' namespace =="
+            curl -s "https://hub.docker.com/v2/repositories/myscale/?page_size=100" | jq -r '.results[].name' || true
+            echo "== search 'myscaledb' on Docker Hub =="
+            REPO=$(curl -s "https://hub.docker.com/v2/search/repositories/?query=myscaledb&page_size=25" | jq -r '.results[0].repo_name // empty')
+            echo "search top result: $REPO"
+          fi
+          if [ -z "$REPO" ]; then
+            echo "== ghcr.io probe =="
+            TOK=$(curl -s "https://ghcr.io/token?scope=repository:myscale/myscaledb:pull" | jq -r .token)
+            curl -s -H "Authorization: Bearer $TOK" "https://ghcr.io/v2/myscale/myscaledb/tags/list" | head -c 500 || true
+            echo ""
+            exit 1
+          fi
+          TAGS=$(curl -s "https://hub.docker.com/v2/repositories/$REPO/tags?page_size=100" | jq -r '.results[].name')
+          echo "== tags of $REPO =="; echo "$TAGS"
+          TAG=$(echo "$TAGS" | grep -x "1\.8\.0" || true)
+          [ -z "$TAG" ] && TAG=$(echo "$TAGS" | grep -E "^1\.8" | head -1 || true)
+          [ -z "$TAG" ] && TAG=$(echo "$TAGS" | grep -E "^[0-9]+\.[0-9]+\.[0-9]+$" | head -1 || true)
+          [ -z "$TAG" ] && TAG=$(echo "$TAGS" | head -1)
+          [ -z "$TAG" ] && { echo "no tag found"; exit 1; }
+          echo "RESOLVED: $REPO:$TAG"
+          echo "REPO=$REPO" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
       - name: Pull and save image
         run: |
-          docker pull myscale/myscaledb:1.8.0
-          docker save myscale/myscaledb:1.8.0 | gzip > myscaledb-1.8.0.tar.gz
-          ls -lh myscaledb-1.8.0.tar.gz
+          set -e
+          docker pull "$REPO:$TAG"
+          docker save "$REPO:$TAG" | gzip > "myscaledb-$TAG.tar.gz"
+          ls -lh
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: image-1.8.0
-          name: "MyScaleDB 1.8.0 image"
-          files: myscaledb-1.8.0.tar.gz
+          tag_name: "image-${{ env.TAG }}"
+          name: "MyScaleDB ${{ env.TAG }} image"
+          files: "myscaledb-${{ env.TAG }}.tar.gz"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
