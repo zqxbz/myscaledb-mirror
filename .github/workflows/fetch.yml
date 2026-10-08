@@ -45,13 +45,19 @@ jobs:
           set -e
           docker pull "$REPO:$TAG"
           docker save "$REPO:$TAG" | gzip > "myscaledb-$TAG.tar.gz"
-          ls -lh
+          ls -lh "myscaledb-$TAG.tar.gz"
+          split -b 1900m -d "myscaledb-$TAG.tar.gz" "myscaledb-$TAG.tar.gz.part-"
+          ls -lh myscaledb-$TAG.tar.gz.part-*
+          sha256sum "myscaledb-$TAG.tar.gz" > sha256.txt
+          cat sha256.txt
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "image-${{ env.TAG }}"
           name: "MyScaleDB ${{ env.TAG }} image"
-          files: "myscaledb-${{ env.TAG }}.tar.gz"
+          files: |
+            myscaledb-${{ env.TAG }}.tar.gz.part-*
+            sha256.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
