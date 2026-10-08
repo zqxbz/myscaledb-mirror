@@ -5,6 +5,8 @@ on:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Resolve repo and tag
         id: resolve
