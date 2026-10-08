@@ -1,0 +1,22 @@
+name: fetch-myscaledb
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull and save image
+        run: |
+          docker pull myscale/myscaledb:1.8.0
+          docker save myscale/myscaledb:1.8.0 | gzip > myscaledb-1.8.0.tar.gz
+          ls -lh myscaledb-1.8.0.tar.gz
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: image-1.8.0
+          name: "MyScaleDB 1.8.0 image"
+          files: myscaledb-1.8.0.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
